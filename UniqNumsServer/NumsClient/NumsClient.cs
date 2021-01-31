@@ -1,15 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
-namespace NumsClient
-{
+namespace NumsClient {
     // Client app is sending messages to a Server/Listener
     // Both listener & client can send messages back & forth once a communication is established
     public class NumsClient
@@ -21,12 +17,22 @@ namespace NumsClient
         private static ManualResetEvent connectDone = new ManualResetEvent(false);
         private static ManualResetEvent sendDone = new ManualResetEvent(false);
 
+        /// <summary>
+        /// Main method that starts client
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
         public static int Main(string[] args)
         {
             StartClient();
             return 0;
         }
 
+        /// <summary>
+        /// StartClient public method that initiates socket & connections. Then calls private ReadNums method to obtain string of numbers from a file
+        /// File is chosen as the preffered way of providing the list of numbers. The files should be placed within the same location as the client application
+        /// Once operation is complete, the client does not receive any feedback from the listener and it shuts down silently
+        /// </summary>
         public static void StartClient()
         {
             // Connect to a remote device
@@ -77,6 +83,10 @@ namespace NumsClient
             return sbNums.ToString();
         }
 
+        /// <summary>
+        /// private ConnectCallback method where the socket connection is established
+        /// </summary>
+        /// <param name="asyncResult"></param>
         private static void ConnectCallback(IAsyncResult asyncResult) {
             try {
                 // Retrieve the socket from the state object
@@ -94,6 +104,11 @@ namespace NumsClient
             }
         }
 
+        /// <summary>
+        /// Send private method that's calling BeginSend async method
+        /// </summary>
+        /// <param name="client"></param>
+        /// <param name="data"></param>
         private static void Send(Socket client, String data) {
             // Convert the string data to byte data using ASCII encoding
             byte[] byteData = Encoding.ASCII.GetBytes(data);
@@ -102,6 +117,10 @@ namespace NumsClient
             client.BeginSend(byteData, 0, byteData.Length, 0, new AsyncCallback(SendCallback), client);
         }
 
+        /// <summary>
+        /// SendCallback 
+        /// </summary>
+        /// <param name="asyncResult"></param>
         private static void SendCallback(IAsyncResult asyncResult) {
             try {
                 // Retrieve the socket from the state object

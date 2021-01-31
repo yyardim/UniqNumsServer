@@ -7,10 +7,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
-namespace UniqNumsServer
-{
+namespace UniqNumsServer {
     /// <summary>
     /// Asynchronous server socket proceses network service requests
     /// </summary>
@@ -20,14 +18,22 @@ namespace UniqNumsServer
         // below it is set to false, so all threads that call WaitOne() will block until some thread calls the Set() method.
         public static ManualResetEvent allDone = new ManualResetEvent(false);
         public static ReaderWriterLockSlim writer = new ReaderWriterLockSlim();
+        public static ConcurrentBag<string> concurrentNumsBag = new ConcurrentBag<string>();
         public static int uniqNumCount = 0;
         public static int dupNumCount = 0;
         public static int uniqNumTotal = 0;
-
+        
+        /// <summary>
+        /// Empty Ctor
+        /// </summary>
         public NumsSocketListener()
         {
         }
-
+        /// <summary>
+        /// Main Method
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
         public static int Main(string[] args)
         {
             StartListening();
@@ -78,12 +84,21 @@ namespace UniqNumsServer
             Console.WriteLine("Closing the listener...");
         }
 
+        /// <summary>
+        /// Private method to write Console Report
+        /// </summary>
+        /// <param name="stateInfo"></param>
         private static void ConsoleReport(Object stateInfo) {
             Console.WriteLine("{0} unique numbers, {1} duplicates. Unique total: {2}", uniqNumCount, dupNumCount, uniqNumTotal);
             uniqNumCount = 0;
             dupNumCount = 0;
         }
 
+        /// <summary>
+        /// Public callback that accepts IAsyncResult and sets up listener. The BeginReceive is within this method
+        /// Accepts buffer & ReadCallback
+        /// </summary>
+        /// <param name="asyncResult"></param>
         public static void AcceptCallback(IAsyncResult asyncResult)
         {
             // Signals all the waiting threads to continue
@@ -101,6 +116,15 @@ namespace UniqNumsServer
             handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(ReadCallback), state);
         }
 
+        /// <summary>
+        /// ReadCallback - read bytes and converts to string array with split of newlines
+        /// Line lengths are verified to be 9 and to be digits only
+        /// If "terminate" line is found, program shuts down
+        /// If non-unique lines are found, client is disconnected.
+        /// Thread safe counters are set
+        /// Finally GenerateNumbersLog method is called to write the unique numbers in the log file
+        /// </summary>
+        /// <param name="asyncResult"></param>
         public static void ReadCallback(IAsyncResult asyncResult) {
             String content = String.Empty;
 
@@ -133,7 +157,6 @@ namespace UniqNumsServer
 
                 // check lines have a newline; if so, form a concurrent array by spliting the nums string and work on numbers in a loop
                 if (content.IndexOf(Environment.NewLine) > -1) {
-                    var concurrentNumsBag = new ConcurrentBag<string>();
                     var numbersToWrite = new List<string>();
 
                     string[] numsArray = content.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
@@ -156,10 +179,7 @@ namespace UniqNumsServer
                         }
                     }
 
-
-                    GenerateNumbersLog(numbersToWrite, 5000);
-                    // All the data has been read from the client. Display it on the console
-                    //Console.WriteLine("Read {0} bytes from socket. \n Data: {1}", content.Length, content);
+                    GenerateNumbersLog(numbersToWrite, -1);
 
                 } else {
                     // Not all data received. Get more.
@@ -168,6 +188,11 @@ namespace UniqNumsServer
             }
         }
 
+        /// <summary>
+        /// Private Method to create/append numbers.log file with provided numbers list
+        /// </summary>
+        /// <param name="numbers"></param>
+        /// <param name="timeout"></param>
         private static void GenerateNumbersLog(List<string> numbers, int timeout) {
             var numbersLog = Path.Combine(Directory.GetCurrentDirectory(), "numbers.log");
 
