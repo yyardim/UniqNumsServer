@@ -43,8 +43,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="NumberListener.cs" />
+    <Compile Include="NumsSocketListener.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="StateObject.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
