@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -18,6 +19,7 @@ namespace UniqNumsServer
         // boolean variable in memory. When false, all threads are blocked, and when true, all threads are unblocked
         // below it is set to false, so all threads that call WaitOne() will block until some thread calls the Set() method.
         public static ManualResetEvent allDone = new ManualResetEvent(false);
+        public static ReaderWriterLockSlim writer = new ReaderWriterLockSlim();
 
         public NumsSocketListener()
         {
@@ -125,6 +127,7 @@ namespace UniqNumsServer
                     int uniqNumCount = 0;
                     int dupNumCount = 0;
                     var concurrentNumsBag = new ConcurrentBag<string>();
+                    var numbersToWrite = new List<string>();
 
                     string[] numsArray = content.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -136,6 +139,7 @@ namespace UniqNumsServer
                                 Interlocked.Increment(ref dupNumCount);
                             } else {
                                 concurrentNumsBag.Add(num);
+                                numbersToWrite.Add(num);
                                 Interlocked.Increment(ref uniqNumCount);
                             }
                         } else {
@@ -145,9 +149,9 @@ namespace UniqNumsServer
                     }
 
 
-                    GenerateNumbersLog(content);
+                    GenerateNumbersLog(numbersToWrite, 5000);
                     // All the data has been read from the client. Display it on the console
-                    Console.WriteLine("Read {0} bytes from socket. \n Data: {1}", content.Length, content);
+                    //Console.WriteLine("Read {0} bytes from socket. \n Data: {1}", content.Length, content);
 
                 } else {
                     // Not all data received. Get more.
@@ -156,11 +160,22 @@ namespace UniqNumsServer
             }
         }
 
-        private static string GenerateNumbersLog(string numbers) {
+        private static void GenerateNumbersLog(List<string> numbers, int timeout) {
+            var numbersLog = Path.Combine(Directory.GetCurrentDirectory(), "numbers.log");
 
+            try {
+                writer.TryEnterWriteLock(timeout);
 
-
-            return "";
+                if (!File.Exists(numbersLog)) {
+                    File.WriteAllLines(numbersLog, numbers);
+                } else {
+                    File.AppendAllLines(numbersLog, numbers);
+                }
+            } catch (Exception exc) {
+                Console.WriteLine(exc.ToString());
+            } finally {
+                writer.ExitWriteLock();
+            }
         }
         /// <summary>
         /// Check the number and validate it is formed of digits only
