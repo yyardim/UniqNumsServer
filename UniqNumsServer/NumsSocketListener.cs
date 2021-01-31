@@ -119,17 +119,25 @@ namespace UniqNumsServer
                     }
                 }
 
+                // check lines have a newline; if so, form a concurrent array by spliting the nums string and work on numbers in a loop
                 if (content.IndexOf(Environment.NewLine) > -1) {
 
                     int uniqNumCount = 0;
                     int dupNumCount = 0;
                     var concurrentNumsBag = new ConcurrentBag<string>();
 
-                    string[] numsArray = content.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+                    string[] numsArray = content.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+
                     foreach (var num in numsArray) {
                         // Proceed if the number length is 9 and it is digits only. Otherwise disconnect the client & return
-                        if (num.Length == 9 && IsDigitsOnly(num)) {
-
+                        if ((num.Length == 9 && IsDigitsOnly(num)) || num != string.Empty) {
+                            // If unique, increment unique counter & add to the concurrentBag - Else, increment dup counter
+                            if (concurrentNumsBag.Any(n => n == num)) {
+                                Interlocked.Increment(ref dupNumCount);
+                            } else {
+                                concurrentNumsBag.Add(num);
+                                Interlocked.Increment(ref uniqNumCount);
+                            }
                         } else {
                             handler.Disconnect(true);
                             return;
@@ -141,8 +149,6 @@ namespace UniqNumsServer
                     // All the data has been read from the client. Display it on the console
                     Console.WriteLine("Read {0} bytes from socket. \n Data: {1}", content.Length, content);
 
-                    // Echo the data back to the client. THIS NOT NEEDED
-                    //Send(handler, content);
                 } else {
                     // Not all data received. Get more.
                     handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(ReadCallback), state);
