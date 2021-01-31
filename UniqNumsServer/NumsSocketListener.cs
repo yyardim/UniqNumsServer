@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -97,14 +98,46 @@ namespace UniqNumsServer
 
             // Read data from the client socket
             int bytesRead = handler.EndReceive(asyncResult);
-
+            
             if (bytesRead > 0) {
                 // There might be more data, so store the data received so far
                 state.sb.Append(Encoding.ASCII.GetString(state.buffer, 0, bytesRead));
 
                 // check for end-of-file tag. If it's not there, read more data
                 content = state.sb.ToString();
+
+                // check "terminate" case independent & shutdown if exists
+                if (content.IndexOf("terminate", StringComparison.CurrentCultureIgnoreCase) > -1) {
+                    try {
+                        handler.Shutdown(SocketShutdown.Both);
+                    } catch (Exception exc) {
+                        Console.WriteLine(exc.ToString());
+                        throw;
+                    } finally {
+                        handler.Close();
+                        System.Environment.Exit(0);
+                    }
+                }
+
                 if (content.IndexOf(Environment.NewLine) > -1) {
+
+                    int uniqNumCount = 0;
+                    int dupNumCount = 0;
+                    var concurrentNumsBag = new ConcurrentBag<string>();
+
+                    string[] numsArray = content.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+                    foreach (var num in numsArray) {
+                        // Proceed if the number length is 9 and it is digits only. Otherwise disconnect the client & return
+                        if (num.Length == 9 && IsDigitsOnly(num)) {
+
+                        } else {
+                            handler.Disconnect(true);
+                            return;
+                        }
+                    }
+
+
+                    GenerateNumbersLog(content);
                     // All the data has been read from the client. Display it on the console
                     Console.WriteLine("Read {0} bytes from socket. \n Data: {1}", content.Length, content);
 
@@ -115,6 +148,26 @@ namespace UniqNumsServer
                     handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(ReadCallback), state);
                 }
             }
+        }
+
+        private static string GenerateNumbersLog(string numbers) {
+
+
+
+            return "";
+        }
+        /// <summary>
+        /// Check the number and validate it is formed of digits only
+        /// </summary>
+        /// <param name="num"></param>
+        /// <returns></returns>
+        private static bool IsDigitsOnly(string num) {
+            foreach (char c in num) {
+                if (c < '0' || c > '9') {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 }
