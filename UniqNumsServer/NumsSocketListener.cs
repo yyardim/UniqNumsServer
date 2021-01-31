@@ -20,6 +20,9 @@ namespace UniqNumsServer
         // below it is set to false, so all threads that call WaitOne() will block until some thread calls the Set() method.
         public static ManualResetEvent allDone = new ManualResetEvent(false);
         public static ReaderWriterLockSlim writer = new ReaderWriterLockSlim();
+        public static int uniqNumCount = 0;
+        public static int dupNumCount = 0;
+        public static int uniqNumTotal = 0;
 
         public NumsSocketListener()
         {
@@ -27,7 +30,6 @@ namespace UniqNumsServer
 
         public static int Main(string[] args)
         {
-            //StartServer();
             StartListening();
             return 0;
         }
@@ -42,7 +44,10 @@ namespace UniqNumsServer
             IPHostEntry host = Dns.GetHostEntry("localhost");
             IPEndPoint localEndPoint = new IPEndPoint(host.AddressList[0], 4000);
 
-            Console.WriteLine($"Local address & port: {localEndPoint}");
+            Console.WriteLine($"UniqNumsServer has started! Waiting for connections at the port: {localEndPoint}");
+            Console.WriteLine("Received\n\r");
+            // Start timer for console report
+            Timer timer = new Timer(ConsoleReport, null, 0, 10000);
 
             // Create a TCP/IP socket
             Socket listener = new Socket(localEndPoint.Address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -59,7 +64,6 @@ namespace UniqNumsServer
                     allDone.Reset();
 
                     // Start an async socket to listen for connections
-                    Console.WriteLine("Waiting for a connection...");
                     listener.BeginAccept(new AsyncCallback(AcceptCallback), listener);
 
                     // Wait until a connection is made before continuing & block the thread in the meantime
@@ -72,6 +76,12 @@ namespace UniqNumsServer
             }
 
             Console.WriteLine("Closing the listener...");
+        }
+
+        private static void ConsoleReport(Object stateInfo) {
+            Console.WriteLine("{0} unique numbers, {1} duplicates. Unique total: {2}", uniqNumCount, dupNumCount, uniqNumTotal);
+            uniqNumCount = 0;
+            dupNumCount = 0;
         }
 
         public static void AcceptCallback(IAsyncResult asyncResult)
@@ -123,9 +133,6 @@ namespace UniqNumsServer
 
                 // check lines have a newline; if so, form a concurrent array by spliting the nums string and work on numbers in a loop
                 if (content.IndexOf(Environment.NewLine) > -1) {
-
-                    int uniqNumCount = 0;
-                    int dupNumCount = 0;
                     var concurrentNumsBag = new ConcurrentBag<string>();
                     var numbersToWrite = new List<string>();
 
@@ -141,6 +148,7 @@ namespace UniqNumsServer
                                 concurrentNumsBag.Add(num);
                                 numbersToWrite.Add(num);
                                 Interlocked.Increment(ref uniqNumCount);
+                                Interlocked.Increment(ref uniqNumTotal);
                             }
                         } else {
                             handler.Disconnect(true);
