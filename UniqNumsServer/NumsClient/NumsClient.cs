@@ -44,6 +44,8 @@ namespace NumsClient {
 
                 // Create a TCP/IP socket
                 Socket client = new Socket(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                client.ReceiveBufferSize = 50000000;
+                client.SendBufferSize = 50000000;
 
                 // Connect to the remote endoint
                 client.BeginConnect(remoteEndPoint, new AsyncCallback(ConnectCallback), client);
@@ -125,7 +127,7 @@ namespace NumsClient {
             try {
                 // Retrieve the socket from the state object
                 Socket client = (Socket)asyncResult.AsyncState;
-
+                
                 // complete sending the data to the remote device
                 int bytesSent = client.EndSend(asyncResult);
                 Console.WriteLine("Sent {0} bytes to server.", bytesSent);

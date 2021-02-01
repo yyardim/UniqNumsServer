@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace UniqNumsServer {
     /// <summary>
@@ -18,10 +19,14 @@ namespace UniqNumsServer {
         // below it is set to false, so all threads that call WaitOne() will block until some thread calls the Set() method.
         public static ManualResetEvent allDone = new ManualResetEvent(false);
         public static ReaderWriterLockSlim writer = new ReaderWriterLockSlim();
-        public static ConcurrentBag<string> concurrentNumsBag = new ConcurrentBag<string>();
+        public static ConcurrentBag<int> concurrentNumsBag = new ConcurrentBag<int>();
+        public static IEnumerable<int> distinctConcurrentNumsBag = new List<int>();
+        public static IEnumerable<int> allNumsBag = new List<int>();
+        public static IEnumerable<int> newUniqNums = new List<int>();
         public static int uniqNumCount = 0;
         public static int dupNumCount = 0;
         public static int uniqNumTotal = 0;
+        public static int counter = 0;
         
         /// <summary>
         /// Empty Ctor
@@ -131,7 +136,8 @@ namespace UniqNumsServer {
             // Retrieve the state object and the handler socket from the asynchronous state object
             StateObject state = (StateObject)asyncResult.AsyncState;
             Socket handler = state.workSocket;
-
+            handler.ReceiveBufferSize = 50000000;
+            handler.SendBufferSize = 50000000;
             // Read data from the client socket
             int bytesRead = handler.EndReceive(asyncResult);
             
@@ -157,30 +163,43 @@ namespace UniqNumsServer {
 
                 // check lines have a newline; if so, form a concurrent array by spliting the nums string and work on numbers in a loop
                 if (content.IndexOf(Environment.NewLine) > -1) {
-                    var numbersToWrite = new List<string>();
 
                     string[] numsArray = content.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
 
-                    foreach (var num in numsArray) {
-                        // Proceed if the number length is 9 and it is digits only. Otherwise disconnect the client & return
-                        if ((num.Length == 9 && IsDigitsOnly(num)) || num != string.Empty) {
-                            // If unique, increment unique counter & add to the concurrentBag - Else, increment dup counter
-                            if (concurrentNumsBag.Any(n => n == num)) {
-                                Interlocked.Increment(ref dupNumCount);
+                    try {
+                        int[] intNumsArray = Array.ConvertAll<string, int>(numsArray, int.Parse);
+                        Parallel.For(0, intNumsArray.Length, i => {
+                            if (Math.Floor(Math.Log10(intNumsArray[i]) + 1) <= 9) {
+                                concurrentNumsBag.Add(intNumsArray[i]);
+                                Interlocked.Increment(ref counter);
                             } else {
-                                concurrentNumsBag.Add(num);
-                                numbersToWrite.Add(num);
-                                Interlocked.Increment(ref uniqNumCount);
-                                Interlocked.Increment(ref uniqNumTotal);
+                                handler.Disconnect(true);
+                                return;
                             }
-                        } else {
-                            handler.Disconnect(true);
-                            return;
+                        });
+                        var lockObject = new object();
+                        lock (lockObject) {
+                            // first get the distinct numbers from the generated list above
+                            distinctConcurrentNumsBag = concurrentNumsBag.Distinct().ToList();
+
+                            // get new unique numbers from the distinct list comparing with all numbers from previous runs
+                            newUniqNums = distinctConcurrentNumsBag.Except(allNumsBag).ToList();
+
+                            // add new unique numbers to the all numbers
+                            allNumsBag = allNumsBag.Union(newUniqNums).ToList();
+
+                            dupNumCount = concurrentNumsBag.Count - newUniqNums.Count();
+                            uniqNumCount = newUniqNums.Count();
+                            uniqNumTotal += uniqNumCount;
+                            concurrentNumsBag = new ConcurrentBag<int>();
                         }
+
+                        GenerateNumbersLog(newUniqNums, -1);
+                    } catch (Exception exc) {
+                        Console.WriteLine(exc.ToString());
+                    } finally {
+                        handler.Disconnect(true);
                     }
-
-                    GenerateNumbersLog(numbersToWrite, -1);
-
                 } else {
                     // Not all data received. Get more.
                     handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(ReadCallback), state);
@@ -193,35 +212,22 @@ namespace UniqNumsServer {
         /// </summary>
         /// <param name="numbers"></param>
         /// <param name="timeout"></param>
-        private static void GenerateNumbersLog(List<string> numbers, int timeout) {
+        private static void GenerateNumbersLog(IEnumerable<int> numbers, int timeout) {
             var numbersLog = Path.Combine(Directory.GetCurrentDirectory(), "numbers.log");
 
             try {
                 writer.TryEnterWriteLock(timeout);
 
                 if (!File.Exists(numbersLog)) {
-                    File.WriteAllLines(numbersLog, numbers);
+                    File.WriteAllLines(numbersLog, numbers.Select(n => n.ToString()));
                 } else {
-                    File.AppendAllLines(numbersLog, numbers);
+                    File.AppendAllLines(numbersLog, numbers.Select(n => n.ToString()));
                 }
             } catch (Exception exc) {
                 Console.WriteLine(exc.ToString());
             } finally {
                 writer.ExitWriteLock();
             }
-        }
-        /// <summary>
-        /// Check the number and validate it is formed of digits only
-        /// </summary>
-        /// <param name="num"></param>
-        /// <returns></returns>
-        private static bool IsDigitsOnly(string num) {
-            foreach (char c in num) {
-                if (c < '0' || c > '9') {
-                    return false;
-                }
-            }
-            return true;
         }
     }
 }
