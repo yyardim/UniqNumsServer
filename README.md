@@ -16,9 +16,9 @@ Instructions for local debugging:
 - Open \UniqueNumsServer\UniqNumsServer\NumsClient\NumsClient.sln in Visual Studio - This is the client
 - Open \UniqueNumsServer\UniqNumsServer\TestClients folder, to access sample test nums.txt files. 
 
-There are 5 client folders in the root folder to test with. Client1 has the most data (around 4.5M numbers) while Client4 has "terminate" in between numbers, which will cause the server to shutdown. 
-To test the server, execute NumsClient.exe from the \UniqueNumsServer\UniqNumsServer\TestClients\Client1 folder directly while the server is running and waiting for connections. 
-In order to debug both the server & client simultenaously, copy the nums.txt file into \UniqueNumsServer\UniqNumsServer\NumsClient\bin\Debug\ folder first. Then start debugging the NumsClient project while UniqNumsServer project is already running. Now the file will be transmitted to the server.
+* There are 5 client folders in the root folder to test with. Client1 has the most data (around 4.5M numbers) while Client4 has "terminate" in between numbers, which will cause the server to shutdown. 
+* To test the server, execute NumsClient.exe from the \UniqueNumsServer\UniqNumsServer\TestClients\Client1 folder directly while the server is running and waiting for connections. 
+* In order to debug both the server & client simultenaously, copy the nums.txt file into \UniqueNumsServer\UniqNumsServer\NumsClient\bin\Debug\ folder first. Then start debugging the NumsClient project while UniqNumsServer project is already running. Now the file will be transmitted to the server.
 
 - Future Release will include the following:
   - The buffer size is takern into a configuration so that it could be adjusted by the user
